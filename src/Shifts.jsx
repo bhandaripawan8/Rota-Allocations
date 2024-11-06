@@ -34,49 +34,133 @@ const Shifts = () => {
     { name: "SUN", hours: 20 }, { name: "SALIMA", hours: 20 }
   ];
 
-  const shiftPatterns = [
-    { shift: "E", hours: 7.5, requiredShifts: 13 },
-    { shift: "L", hours: 7.5, requiredShifts: 14 },
-    { shift: "9-9", hours: 12, requiredShifts: 1 },
-    { shift: "11-7", hours: 8, requiredShifts: 1 },
-    { shift: "8-6", hours: 10, requiredShifts: 1 },
-    { shift: "8-8", hours: 12, requiredShifts: 1 }
+  const serviceUsers = [
+    { name: "KC", shifts: ["E", "E", "L", "L"] },
+    { name: "OJ", shifts: ["E", "L"] },
+    { name: "SB", shifts: ["E", "L"] },
+    { name: "HM", shifts: ["E", "E", "L", "L"] },
+    { name: "ST", shifts: ["9-9"] },
+    { name: "CD", shifts: ["11-7"] },
+    { name: "MJ", shifts: ["E", "L"] },
+    { name: "MJ/SA", shifts: ["8-6"] },
+    { name: "SA", shifts: ["E", "L"] },
+    { name: "AB", shifts: ["E", "L"] },
+    { name: "RT", shifts: ["E", "L", "L"] },
+    { name: "SC", shifts: ["E", "E", "L", "L"] },
+    { name: "MP", shifts: ["E", "L", "8-8"] }
   ];
 
-  // Function to allocate shifts
-  const allocateShifts = (employees, shiftPatterns) => {
+  // Function to determine the shift pattern for each service user
+  const getShiftPattern = (shifts) => {
+    const earlyShiftCount = shifts.filter(shift => shift === "E").length;
+    const lateShiftCount = shifts.filter(shift => shift === "L").length;
+    
+    if (earlyShiftCount > 0 && lateShiftCount > 0) {
+      return "Early/Late";
+    }
+    if (earlyShiftCount > 0) {
+      return "Early";
+    }
+    if (lateShiftCount > 0) {
+      return "Late";
+    }
+    return "N/A";
+  };
+
+  // Function to assign shifts for the week (Monday to Sunday)
+  const allocateShifts = (employees, serviceUsers) => {
     const assignments = employees.map(employee => ({
       name: employee.name,
       remainingHours: employee.hours,
-      assignedShifts: []
+      assignedShifts: {}
     }));
 
-    shiftPatterns.forEach(pattern => {
-      for (let i = 0; i < pattern.requiredShifts; i++) {
-        const employee = assignments.find(emp => emp.remainingHours >= pattern.hours);
-        
-        if (employee) {
-          employee.assignedShifts.push(pattern.shift);
-          employee.remainingHours -= pattern.hours;
-        } else {
-          console.log("No available employee for", pattern.shift);
+    const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    serviceUsers.forEach(serviceUser => {
+      let dayIndex = 0; // Start with Monday
+
+      serviceUser.shifts.forEach(shift => {
+        let shiftDuration = 7.5;  // Default shift duration for "E" and "L"
+        if (shift === "9-9") shiftDuration = 12;
+        if (shift === "11-7") shiftDuration = 8;
+        if (shift === "8-6" || shift === "8-8") shiftDuration = 12;
+
+        // Assign employees based on shift type
+        let remainingShifts = serviceUser.shifts.filter(s => s === shift).length;
+
+        while (remainingShifts > 0) {
+          const employee = assignments.find(emp => emp.remainingHours >= shiftDuration);
+
+          if (employee) {
+            // Assign the employee's name to the corresponding service user and shift day
+            const day = daysOfWeek[dayIndex];
+            if (!employee.assignedShifts[day]) {
+              employee.assignedShifts[day] = [];
+            }
+
+            employee.assignedShifts[day].push({
+              shift: shift,
+              serviceUser: serviceUser.name,
+              employeeName: employee.name
+            });
+
+            employee.remainingHours -= shiftDuration; // Subtract hours for the shift
+            remainingShifts--; // Decrease remaining shifts to be assigned
+
+            // Move to the next day (circular through the week)
+            dayIndex = (dayIndex + 1) % 7;
+          } else {
+            console.log("No available employee for shift:", shift);
+            break;
+          }
         }
-      }
+      });
     });
-    
+
     return assignments;
   };
 
-  const finalAssignments = allocateShifts(employees, shiftPatterns);
+  const finalAssignments = allocateShifts(employees, serviceUsers);
 
   return (
     <div>
-      <h2>Shift Assignments</h2>
-      {finalAssignments.map(employee => (
-        <div key={employee.name}>
-          <strong>{employee.name}</strong>: Assigned Shifts: {employee.assignedShifts.join(", ")}, Remaining Hours: {employee.remainingHours}
-        </div>
-      ))}
+      <h2>Shift Assignments for the Week</h2>
+      <table border="1" cellPadding="5" style={{ width: '100%', marginBottom: '20px' }}>
+        <thead>
+          <tr>
+            <th>Service User</th>
+            <th>Shift Pattern</th>
+            <th>Monday</th>
+            <th>Tuesday</th>
+            <th>Wednesday</th>
+            <th>Thursday</th>
+            <th>Friday</th>
+            <th>Saturday</th>
+            <th>Sunday</th>
+          </tr>
+        </thead>
+        <tbody>
+          {serviceUsers.map(serviceUser => (
+            serviceUser.shifts.map((shift, index) => (
+              <tr key={`${serviceUser.name}-${index}`}>
+                <td>{serviceUser.name}</td>
+                <td>{getShiftPattern(serviceUser.shifts)}</td>
+                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(day => {
+                  const shiftForDay = finalAssignments
+                    .filter(emp => emp.assignedShifts[day]?.some(shift => shift.serviceUser === serviceUser.name))
+                    .map(emp => emp.assignedShifts[day]?.find(shift => shift.serviceUser === serviceUser.name)?.employeeName);
+                  return (
+                    <td key={day}>
+                      {shiftForDay ? shiftForDay.join(", ") : "No Assignment"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
